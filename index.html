@@ -1,122 +1,678 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Workout Tracker</title>
+<meta charset="UTF-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
+<title>Neon Stack Rush</title>
 <style>
-body{
-    margin:0;
-    font-family:Arial,sans-serif;
-    background:#111;
-    color:white;
+html,body{
+margin:0;
+padding:0;
+overflow:hidden;
+background:#0b0f1a;
+font-family:system-ui;
 }
-header{
-    background:#22c55e;
-    padding:20px;
-    text-align:center;
-    font-size:28px;
-    font-weight:bold;
+canvas{display:block;}
+
+/* UI overlay */
+#ui{
+position:fixed;
+top:0;left:0;
+width:100%;
+height:100%;
+pointer-events:none;
+color:white;
 }
-.container{
-    max-width:500px;
-    margin:auto;
-    padding:20px;
+
+.center{
+position:absolute;
+left:50%;
+top:50%;
+transform:translate(-50%,-50%);
+text-align:center;
 }
-input{
-    width:100%;
-    padding:12px;
-    margin:8px 0;
-    border:none;
-    border-radius:10px;
-    font-size:16px;
-    box-sizing:border-box;
-}
+
 button{
-    width:100%;
-    padding:14px;
-    background:#22c55e;
-    color:white;
-    border:none;
-    border-radius:10px;
-    font-size:18px;
-    cursor:pointer;
+pointer-events:auto;
+padding:12px 18px;
+border:none;
+border-radius:12px;
+background:#4b7bec;
+color:white;
+font-size:16px;
+margin-top:10px;
 }
-.workout{
-    background:#222;
-    margin-top:15px;
-    padding:15px;
-    border-radius:10px;
+
+.hidden{display:none;}
+
+#topBar{
+position:absolute;
+top:10px;
+left:10px;
+right:10px;
+display:flex;
+justify-content:space-between;
+font-size:18px;
 }
+
 </style>
 </head>
 <body>
 
-<header>💪 Workout Tracker</header>
+<canvas id="game"></canvas>
 
-<div class="container">
+<div id="ui">
 
-<input id="exercise" placeholder="Exercise">
-<input id="sets" type="number" placeholder="Sets">
-<input id="reps" type="number" placeholder="Reps">
+<div id="startScreen" class="center">
+<h1>NEON STACK RUSH</h1>
+<p>Tap to drop blocks. Stack perfectly. Don’t miss.</p>
+<button onclick="game.start()">Start</button>
+</div>
 
-<button onclick="saveWorkout()">Save Workout</button>
+<div id="gameOverScreen" class="center hidden">
+<h1>Game Over</h1>
+<p id="finalScore"></p>
+<button onclick="game.restart()">Restart</button>
+</div>
 
-<h2>History</h2>
-
-<div id="history"></div>
+<div id="topBar">
+<div id="score">Score: 0</div>
+<div id="highScore">High: 0</div>
+</div>
 
 </div>
 
 <script>
-let workouts = JSON.parse(localStorage.getItem("workouts")) || [];
+/* =====================
+   CORE ENGINE
+===================== */
 
-function saveWorkout(){
+class Input {
+constructor(canvas){
+this.x=0;
+this.y=0;
+this.down=false;
 
-const exercise=document.getElementById("exercise").value;
-const sets=document.getElementById("sets").value;
-const reps=document.getElementById("reps").value;
-
-if(exercise=="") return;
-
-workouts.unshift({
-exercise,
-sets,
-reps,
-date:new Date().toLocaleString()
+canvas.addEventListener("mousedown",e=>this.down=true);
+canvas.addEventListener("mouseup",e=>this.down=false);
+canvas.addEventListener("mousemove",e=>{
+this.x=e.clientX;
+this.y=e.clientY;
 });
 
-localStorage.setItem("workouts",JSON.stringify(workouts));
+canvas.addEventListener("touchstart",e=>{
+this.down=true;
+this.x=e.touches[0].clientX;
+this.y=e.touches[0].clientY;
+});
 
-document.getElementById("exercise").value="";
-document.getElementById("sets").value="";
-document.getElementById("reps").value="";
+canvas.addEventListener("touchend",()=>this.down=false);
 
-display();
+canvas.addEventListener("touchmove",e=>{
+this.x=e.touches[0].clientX;
+this.y=e.touches[0].clientY;
+});
+}
 }
 
-function display(){
-
-let html="";
-
-for(let w of workouts){
-
-html+=`
-<div class="workout">
-<b>${w.exercise}</b><br>
-${w.sets} sets × ${w.reps} reps<br>
-<small>${w.date}</small>
-</div>
-`;
-
+/* =====================
+   AUDIO ENGINE (procedural beeps)
+===================== */
+class AudioEngine{
+constructor(){
+this.ctx = new (window.AudioContext||window.webkitAudioContext)();
+}
+beep(freq=440,duration=0.1,type="sine"){
+const o=this.ctx.createOscillator();
+const g=this.ctx.createGain();
+o.type=type;
+o.frequency.value=freq;
+g.gain.value=0.1;
+o.connect(g);
+g.connect(this.ctx.destination);
+o.start();
+o.stop(this.ctx.currentTime+duration);
+}
 }
 
-document.getElementById("history").innerHTML=html;
-
+/* =====================
+   PARTICLES
+===================== */
+class Particle{
+constructor(x,y,color){
+this.x=x;
+this.y=y;
+this.vx=(Math.random()-0.5)*6;
+this.vy=(Math.random()-0.5)*6;
+this.life=1;
+this.color=color;
+}
+update(){
+this.x+=this.vx;
+this.y+=this.vy;
+this.vy+=0.1;
+this.life-=0.02;
+}
+draw(ctx){
+ctx.globalAlpha=this.life;
+ctx.fillStyle=this.color;
+ctx.fillRect(this.x,this.y,4,4);
+ctx.globalAlpha=1;
+}
 }
 
-display();
+class ParticleSystem{
+constructor(){
+this.particles=[];
+}
+spawn(x,y,color){
+for(let i=0;i<12;i++){
+this.particles.push(new Particle(x,y,color));
+}
+}
+update(){
+this.particles=this.particles.filter(p=>p.life>0);
+this.particles.forEach(p=>p.update());
+}
+draw(ctx){
+this.particles.forEach(p=>p.draw(ctx));
+}
+}
+
+/* =====================
+   SCREEN SHAKE
+===================== */
+class Shake{
+constructor(){
+this.power=0;
+}
+add(p){this.power=p;}
+update(){
+this.power*=0.9;
+return {
+x:(Math.random()-0.5)*this.power,
+y:(Math.random()-0.5)*this.power
+};
+}
+}
+
+/* =====================
+   MAIN GAME CLASS (base shell only)
+===================== */
+class Game{
+constructor(canvas){
+this.canvas=canvas;
+this.ctx=canvas.getContext("2d");
+
+this.resize();
+window.addEventListener("resize",()=>this.resize());
+
+this.input=new Input(canvas);
+this.audio=new AudioEngine();
+this.particles=new ParticleSystem();
+this.shake=new Shake();
+
+this.running=false;
+this.score=0;
+this.highScore=localStorage.getItem("high")||0;
+
+document.getElementById("highScore").innerText="High: "+this.highScore;
+
+this.last=0;
+this.loop=this.loop.bind(this);
+
+requestAnimationFrame(this.loop);
+}
+
+resize(){
+this.canvas.width=innerWidth;
+this.canvas.height=innerHeight;
+}
+
+start(){
+document.getElementById("startScreen").classList.add("hidden");
+this.running=true;
+this.score=0;
+}
+
+restart(){
+document.getElementById("gameOverScreen").classList.add("hidden");
+this.running=true;
+this.score=0;
+}
+
+gameOver(){
+this.running=false;
+document.getElementById("gameOverScreen").classList.remove("hidden");
+document.getElementById("finalScore").innerText="Score: "+this.score;
+
+if(this.score>this.highScore){
+this.highScore=this.score;
+localStorage.setItem("high",this.highScore);
+}
+}
+
+update(dt){
+if(!this.running) return;
+
+this.particles.update();
+}
+
+draw(){
+const ctx=this.ctx;
+const shake=this.shake.update();
+
+ctx.setTransform(1,0,0,1,0,0);
+ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+
+ctx.translate(shake.x,shake.y);
+
+/* background glow */
+let g=ctx.createLinearGradient(0,0,0,this.canvas.height);
+g.addColorStop(0,"#0b0f1a");
+g.addColorStop(1,"#111a33");
+ctx.fillStyle=g;
+ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+
+this.particles.draw(ctx);
+}
+
+loop(t){
+const dt=t-this.last;
+this.last=t;
+
+this.update(dt);
+this.draw();
+
+requestAnimationFrame(this.loop);
+}
+}
+
+/* start game */
+const canvas=document.getElementById("game");
+const game=new Game(canvas);
 </script>
 
 </body>
 </html>
+<script>
+/* =====================
+   GAME OBJECTS
+===================== */
+
+class Block{
+constructor(game){
+this.game=game;
+
+this.w=120;
+this.h=30;
+
+this.x=game.canvas.width/2 - this.w/2;
+this.y=game.canvas.height - 200;
+
+this.speed=3 + game.level*0.3;
+this.dir=Math.random()>0.5?1:-1;
+
+this.dropped=false;
+this.color=`hsl(${Math.random()*360},80%,60%)`;
+}
+
+update(){
+if(this.dropped) return;
+
+this.x += this.speed*this.dir;
+
+/* bounce walls */
+if(this.x<0){
+this.x=0;
+this.dir=1;
+}
+if(this.x+this.w>this.game.canvas.width){
+this.x=this.game.canvas.width-this.w;
+this.dir=-1;
+}
+}
+
+draw(ctx){
+ctx.fillStyle=this.color;
+ctx.shadowBlur=20;
+ctx.shadowColor=this.color;
+ctx.fillRect(this.x,this.y,this.w,this.h);
+ctx.shadowBlur=0;
+}
+}
+
+/* =====================
+   MAIN GAME LOGIC EXTENSION
+===================== */
+
+Game.prototype.initGameplay=function(){
+this.blocks=[];
+this.cameraY=0;
+this.level=1;
+this.combo=0;
+this.spawnBlock();
+};
+
+Game.prototype.spawnBlock=function(){
+this.current=new Block(this);
+this.blocks.push(this.current);
+};
+
+Game.prototype.dropBlock=function(){
+if(!this.current || this.current.dropped) return;
+
+this.current.dropped=true;
+
+let prev=this.blocks[this.blocks.length-2];
+
+if(!prev){
+this.score+=1;
+this.next();
+return;
+}
+
+/* overlap check */
+let overlap=
+Math.min(this.current.x+this.current.w,prev.x+prev.w) -
+Math.max(this.current.x,prev.x);
+
+if(overlap>this.current.w*0.6){
+/* PERFECT */
+this.combo++;
+this.score+=2*this.combo;
+this.audio.beep(600,0.08);
+this.particles.spawn(this.current.x,this.current.y,this.current.color);
+this.shake.add(5);
+
+} else if(overlap>this.current.w*0.2){
+/* GOOD */
+this.combo=0;
+this.score+=1;
+this.audio.beep(300,0.08);
+this.particles.spawn(this.current.x,this.current.y,this.current.color);
+
+} else {
+/* MISS */
+this.audio.beep(120,0.2,"square");
+this.gameOver();
+return;
+}
+
+this.next();
+};
+
+Game.prototype.next=function(){
+this.level = 1 + Math.floor(this.score/10);
+this.spawnBlock();
+};
+
+/* =====================
+   INPUT HOOK
+===================== */
+
+Game.prototype.handleInput=function(){
+if(!this.running) return;
+
+if(this.input.down){
+this.input.down=false;
+this.dropBlock();
+}
+};
+
+/* =====================
+   UPDATE OVERRIDE
+===================== */
+
+const oldUpdate=Game.prototype.update;
+
+Game.prototype.update=function(dt){
+if(!this.running) return;
+
+this.handleInput();
+
+if(this.current && !this.current.dropped){
+this.current.update();
+}
+
+this.particles.update();
+
+/* score UI */
+document.getElementById("score").innerText="Score: "+this.score;
+document.getElementById("highScore").innerText="High: "+this.highScore;
+};
+
+/* =====================
+   DRAW OVERRIDE
+===================== */
+
+const oldDraw=Game.prototype.draw;
+
+Game.prototype.draw=function(){
+const ctx=this.ctx;
+const shake=this.shake.update();
+
+ctx.setTransform(1,0,0,1,0,0);
+ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+
+ctx.translate(shake.x,shake.y);
+
+/* background */
+let g=ctx.createLinearGradient(0,0,0,this.canvas.height);
+g.addColorStop(0,"#0b0f1a");
+g.addColorStop(1,"#0f1d
+<script>
+/* =====================
+   PAUSE SYSTEM
+===================== */
+
+Game.prototype.togglePause=function(){
+if(!this.running) return;
+
+this.paused = !this.paused;
+
+if(this.paused){
+this.running=false;
+document.getElementById("startScreen").classList.remove("hidden");
+document.querySelector("#startScreen h1").innerText="PAUSED";
+document.querySelector("#startScreen p").innerText="Tap resume to continue";
+document.querySelector("#startScreen button").innerText="Resume";
+document.querySelector("#startScreen button").onclick=()=>this.resume();
+}else{
+this.resume();
+}
+};
+
+Game.prototype.resume=function(){
+this.running=true;
+this.paused=false;
+document.getElementById("startScreen").classList.add("hidden");
+};
+
+/* =====================
+   JUICE SYSTEM (camera pulse + hit flash)
+===================== */
+
+Game.prototype.flash=0;
+
+Game.prototype.addFlash=function(){
+this.flash=1;
+};
+
+const oldDraw3=Game.prototype.draw;
+
+Game.prototype.draw=function(){
+const ctx=this.ctx;
+const shake=this.shake.update();
+
+ctx.setTransform(1,0,0,1,0,0);
+ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
+
+/* flash overlay */
+if(this.flash>0){
+this.flash*=0.9;
+ctx.fillStyle=`rgba(255,255,255,${this.flash*0.3})`;
+ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
+}
+
+/* camera shake */
+ctx.translate(shake.x,shake.y);
+
+/* background pulse based on score */
+let pulse = 1 + Math.sin(Date.now()*0.005)*0.02;
+ctx.scale(pulse,pulse);
+
+let g=ctx.createLinearGradient(0,0,0,this.canvas.height);
+g.addColorStop(0,"#070b14");
+g.addColorStop(1,"#12244a");
+ctx.fillStyle=g;
+ctx.fillRect(-200,-200,this.canvas.width+400,this.canvas.height+400);
+
+/* draw blocks */
+for(let b of this.blocks){
+b.draw(ctx);
+}
+
+/* particles */
+this.particles.draw(ctx);
+};
+
+/* =====================
+   BETTER INPUT FEEDBACK
+===================== */
+
+const oldHandle=Game.prototype.handleInput;
+
+Game.prototype.handleInput=function(){
+if(!this.running) return;
+
+if(this.input.down){
+this.input.down=false;
+
+/* tap feedback */
+this.addFlash();
+
+this.dropBlock();
+this.audio.beep(200+Math.random()*300,0.05);
+}
+};
+
+/* =====================
+   BETTER BLOCK DROP JUICE
+===================== */
+
+const oldDrop=Game.prototype.dropBlock;
+
+Game.prototype.dropBlock=function(){
+if(!this.current || this.current.dropped) return;
+
+this.current.dropped=true;
+
+let prev=this.blocks[this.blocks.length-2];
+
+if(!prev){
+this.score+=1;
+this.next();
+return;
+}
+
+let overlap=
+Math.min(this.current.x+this.current.w,prev.x+prev.w) -
+Math.max(this.current.x,prev.x);
+
+if(overlap>this.current.w*0.65){
+/* PERFECT */
+this.combo++;
+this.score+=2*this.combo;
+
+this.audio.beep(700,0.06);
+this.audio.beep(900,0.06);
+
+this.particles.spawn(this.current.x,this.current.y,this.current.color);
+this.shake.add(8);
+this.addFlash();
+
+} else if(overlap>this.current.w*0.25){
+/* GOOD */
+this.combo=0;
+this.score+=1;
+
+this.audio.beep(350,0.08);
+this.particles.spawn(this.current.x,this.current.y,this.current.color);
+
+} else {
+/* MISS */
+this.combo=0;
+
+this.audio.beep(100,0.2,"square");
+this.shake.add(15);
+this.addFlash();
+
+this.gameOver();
+return;
+}
+
+this.next();
+};
+
+/* =====================
+   IMPROVED START / RESTART FLOW
+===================== */
+
+const oldStart3=Game.prototype.start;
+Game.prototype.start=function(){
+document.getElementById("startScreen").classList.add("hidden");
+
+this.running=true;
+this.paused=false;
+
+this.score=0;
+this.level=1;
+this.combo=0;
+
+this.blocks=[];
+this.initGameplay();
+};
+
+const oldRestart3=Game.prototype.restart;
+Game.prototype.restart=function(){
+document.getElementById("gameOverScreen").classList.add("hidden");
+
+this.running=true;
+this.paused=false;
+
+this.score=0;
+this.level=1;
+this.combo=0;
+
+this.blocks=[];
+this.initGameplay();
+};
+
+/* =====================
+   TOUCH: PREVENT SCROLL + TRUE MOBILE FEEL
+===================== */
+
+document.body.addEventListener("touchmove",e=>{
+e.preventDefault();
+},{passive:false});
+
+/* =====================
+   KEYBOARD SUPPORT (desktop bonus)
+===================== */
+
+window.addEventListener("keydown",e=>{
+if(e.code==="Space"){
+game.input.down=true;
+}
+if(e.code==="KeyP"){
+game.togglePause();
+}
+});
+
+/* =====================
+   FINAL BOOT FIX
+===================== */
+
+game.initGameplay();
+</script>
