@@ -1,678 +1,327 @@
 <!DOCTYPE html>
 <html lang="en">
 <head>
-<meta charset="UTF-8" />
-<meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=no"/>
-<title>Neon Stack Rush</title>
-<style>
-html,body{
-margin:0;
-padding:0;
-overflow:hidden;
-background:#0b0f1a;
-font-family:system-ui;
-}
-canvas{display:block;}
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <title>SAVE HIM! - Pull the Pin</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            background-color: #2c3e50;
+            font-family: 'Arial Black', sans-serif;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            color: white;
+            touch-action: none;
+        }
 
-/* UI overlay */
-#ui{
-position:fixed;
-top:0;left:0;
-width:100%;
-height:100%;
-pointer-events:none;
-color:white;
-}
+        /* The Phone Container */
+        #game-container {
+            width: 100%;
+            max-width: 400px;
+            height: 100%;
+            max-height: 800px;
+            background: linear-gradient(180deg, #87CEEB 0%, #E0F7FA 100%);
+            position: relative;
+            border: 4px solid #333;
+            box-shadow: 0 0 20px rgba(0,0,0,0.5);
+            overflow: hidden;
+        }
 
-.center{
-position:absolute;
-left:50%;
-top:50%;
-transform:translate(-50%,-50%);
-text-align:center;
-}
+        /* Header UI */
+        .header {
+            position: absolute;
+            top: 20px;
+            width: 100%;
+            text-align: center;
+            z-index: 10;
+            pointer-events: none;
+        }
 
-button{
-pointer-events:auto;
-padding:12px 18px;
-border:none;
-border-radius:12px;
-background:#4b7bec;
-color:white;
-font-size:16px;
-margin-top:10px;
-}
+        .level-text {
+            font-size: 24px;
+            color: #FFD700;
+            text-shadow: 2px 2px 0 #000;
+            animation: pulse 1s infinite;
+        }
 
-.hidden{display:none;}
+        /* Game Elements */
+        .character {
+            position: absolute;
+            bottom: 150px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 60px;
+            z-index: 5;
+            transition: all 0.5s;
+        }
 
-#topBar{
-position:absolute;
-top:10px;
-left:10px;
-right:10px;
-display:flex;
-justify-content:space-between;
-font-size:18px;
-}
+        .danger {
+            position: absolute;
+            top: 100px;
+            left: 50%;
+            transform: translateX(-50%);
+            font-size: 50px;
+            z-index: 5;
+        }
 
-</style>
+        .gold {
+            position: absolute;
+            bottom: 150px;
+            right: 40px;
+            font-size: 40px;
+            z-index: 5;
+        }
+
+        /* The Wall/Pin System */
+        .wall {
+            position: absolute;
+            background-color: #555;
+            border: 2px solid #333;
+            z-index: 6;
+        }
+
+        .pin {
+            position: absolute;
+            width: 120px;
+            height: 20px;
+            background-color: #FF4500;
+            border-radius: 10px;
+            border: 3px solid #fff;
+            cursor: pointer;
+            z-index: 10;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            transition: transform 0.2s;
+        }
+
+        .pin::after {
+            content: "PULL";
+            font-size: 12px;
+            font-weight: bold;
+            color: white;
+        }
+
+        .pin:hover {
+            transform: scale(1.05);
+        }
+
+        /* Positioning the specific level */
+        #wall-horizontal {
+            width: 200px;
+            height: 20px;
+            top: 250px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        #pin-1 {
+            top: 245px;
+            left: 50%;
+            transform: translateX(-50%);
+        }
+
+        /* Fake Download Button */
+        .download-btn {
+            position: absolute;
+            bottom: 20px;
+            width: 80%;
+            padding: 15px;
+            background: linear-gradient(90deg, #00C851, #007E33);
+            color: white;
+            text-align: center;
+            font-size: 20px;
+            border-radius: 50px;
+            border: 4px solid white;
+            box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+            cursor: pointer;
+            z-index: 20;
+            animation: bounce 2s infinite;
+        }
+
+        /* Animations */
+        @keyframes pulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+            100% { transform: scale(1); }
+        }
+
+        @keyframes bounce {
+            0%, 20%, 50%, 80%, 100% {transform: translateY(0);}
+            40% {transform: translateY(-10px);}
+            60% {transform: translateY(-5px);}
+        }
+
+        @keyframes fall {
+            0% { top: 100px; }
+            100% { top: 250px; }
+        }
+
+        @keyframes sting {
+            0% { transform: translateX(-50%) rotate(0deg); }
+            25% { transform: translateX(-60%) rotate(-10deg); }
+            50% { transform: translateX(-40%) rotate(10deg); }
+            75% { transform: translateX(-50%) rotate(0deg); }
+            100% { filter: grayscale(100%); opacity: 0.5; }
+        }
+
+        /* Fail Screen */
+        #fail-screen {
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0,0,0,0.8);
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            z-index: 100;
+        }
+
+        .fail-text {
+            color: red;
+            font-size: 40px;
+            font-weight: bold;
+            margin-bottom: 20px;
+        }
+
+        .retry-btn {
+            padding: 10px 30px;
+            background: white;
+            color: black;
+            border: none;
+            font-size: 20px;
+            border-radius: 10px;
+            cursor: pointer;
+        }
+
+        /* Arrows pointing to pin */
+        .arrow {
+            position: absolute;
+            font-size: 40px;
+            color: yellow;
+            z-index: 15;
+            animation: point 1s infinite;
+        }
+        
+        @keyframes point {
+            0% { opacity: 1; transform: translateY(0); }
+            50% { opacity: 0.5; transform: translateY(10px); }
+            100% { opacity: 1; transform: translateY(0); }
+        }
+
+    </style>
 </head>
 <body>
 
-<canvas id="game"></canvas>
+    <div id="game-container">
+        <div class="header">
+            <div class="level-text">LEVEL 1</div>
+        </div>
 
-<div id="ui">
+        <!-- The Danger -->
+        <div class="danger" id="bees">🐝🐝🐝</div>
 
-<div id="startScreen" class="center">
-<h1>NEON STACK RUSH</h1>
-<p>Tap to drop blocks. Stack perfectly. Don’t miss.</p>
-<button onclick="game.start()">Start</button>
-</div>
+        <!-- The Wall -->
+        <div class="wall" id="wall-horizontal"></div>
 
-<div id="gameOverScreen" class="center hidden">
-<h1>Game Over</h1>
-<p id="finalScore"></p>
-<button onclick="game.restart()">Restart</button>
-</div>
+        <!-- The Pin -->
+        <div class="pin" id="pin-1" onclick="pullPin()"></div>
+        
+        <!-- Arrows telling you what to do -->
+        <div class="arrow" style="top: 200px; left: 20%;">👇</div>
+        <div class="arrow" style="top: 200px; right: 20%;">👇</div>
 
-<div id="topBar">
-<div id="score">Score: 0</div>
-<div id="highScore">High: 0</div>
-</div>
+        <!-- The Character -->
+        <div class="character" id="hero">😐</div>
 
-</div>
+        <!-- The Goal -->
+        <div class="gold">💰</div>
 
-<script>
-/* =====================
-   CORE ENGINE
-===================== */
+        <!-- Fake CTA -->
+        <div class="download-btn" onclick="alert('This is just a demo!')">INSTALL NOW</div>
 
-class Input {
-constructor(canvas){
-this.x=0;
-this.y=0;
-this.down=false;
+        <!-- Fail Screen -->
+        <div id="fail-screen">
+            <div class="fail-text">FAIL!</div>
+            <button class="retry-btn" onclick="resetGame()">TRY AGAIN</button>
+        </div>
+    </div>
 
-canvas.addEventListener("mousedown",e=>this.down=true);
-canvas.addEventListener("mouseup",e=>this.down=false);
-canvas.addEventListener("mousemove",e=>{
-this.x=e.clientX;
-this.y=e.clientY;
-});
+    <script>
+        let isFailed = false;
 
-canvas.addEventListener("touchstart",e=>{
-this.down=true;
-this.x=e.touches[0].clientX;
-this.y=e.touches[0].clientY;
-});
+        function pullPin() {
+            if (isFailed) return;
 
-canvas.addEventListener("touchend",()=>this.down=false);
+            const pin = document.getElementById('pin-1');
+            const bees = document.getElementById('bees');
+            const hero = document.getElementById('hero');
+            const wall = document.getElementById('wall-horizontal');
 
-canvas.addEventListener("touchmove",e=>{
-this.x=e.touches[0].clientX;
-this.y=e.touches[0].clientY;
-});
-}
-}
+            // Animate pin removal
+            pin.style.transform = "translateX(200px)";
+            pin.style.opacity = "0";
 
-/* =====================
-   AUDIO ENGINE (procedural beeps)
-===================== */
-class AudioEngine{
-constructor(){
-this.ctx = new (window.AudioContext||window.webkitAudioContext)();
-}
-beep(freq=440,duration=0.1,type="sine"){
-const o=this.ctx.createOscillator();
-const g=this.ctx.createGain();
-o.type=type;
-o.frequency.value=freq;
-g.gain.value=0.1;
-o.connect(g);
-g.connect(this.ctx.destination);
-o.start();
-o.stop(this.ctx.currentTime+duration);
-}
-}
+            // Remove the wall after a slight delay
+            setTimeout(() => {
+                wall.style.display = 'none';
+                
+                // Drop the bees
+                bees.style.transition = "top 0.5s ease-in";
+                bees.style.top = "250px";
 
-/* =====================
-   PARTICLES
-===================== */
-class Particle{
-constructor(x,y,color){
-this.x=x;
-this.y=y;
-this.vx=(Math.random()-0.5)*6;
-this.vy=(Math.random()-0.5)*6;
-this.life=1;
-this.color=color;
-}
-update(){
-this.x+=this.vx;
-this.y+=this.vy;
-this.vy+=0.1;
-this.life-=0.02;
-}
-draw(ctx){
-ctx.globalAlpha=this.life;
-ctx.fillStyle=this.color;
-ctx.fillRect(this.x,this.y,4,4);
-ctx.globalAlpha=1;
-}
-}
+                // Check collision after bees drop
+                setTimeout(() => {
+                    // In these fake ads, the physics are always broken.
+                    // Even though there is gold to the side, the bees hit the guy.
+                    hero.innerText = "😵";
+                    hero.style.animation = "sting 0.5s forwards";
+                    
+                    setTimeout(() => {
+                        showFail();
+                    }, 600);
+                }, 500);
+            }, 200);
+        }
 
-class ParticleSystem{
-constructor(){
-this.particles=[];
-}
-spawn(x,y,color){
-for(let i=0;i<12;i++){
-this.particles.push(new Particle(x,y,color));
-}
-}
-update(){
-this.particles=this.particles.filter(p=>p.life>0);
-this.particles.forEach(p=>p.update());
-}
-draw(ctx){
-this.particles.forEach(p=>p.draw(ctx));
-}
-}
+        function showFail() {
+            isFailed = true;
+            document.getElementById('fail-screen').style.display = 'flex';
+        }
 
-/* =====================
-   SCREEN SHAKE
-===================== */
-class Shake{
-constructor(){
-this.power=0;
-}
-add(p){this.power=p;}
-update(){
-this.power*=0.9;
-return {
-x:(Math.random()-0.5)*this.power,
-y:(Math.random()-0.5)*this.power
-};
-}
-}
+        function resetGame() {
+            isFailed = false;
+            document.getElementById('fail-screen').style.display = 'none';
+            
+            // Reset elements
+            const pin = document.getElementById('pin-1');
+            const bees = document.getElementById('bees');
+            const hero = document.getElementById('hero');
+            const wall = document.getElementById('wall-horizontal');
 
-/* =====================
-   MAIN GAME CLASS (base shell only)
-===================== */
-class Game{
-constructor(canvas){
-this.canvas=canvas;
-this.ctx=canvas.getContext("2d");
-
-this.resize();
-window.addEventListener("resize",()=>this.resize());
-
-this.input=new Input(canvas);
-this.audio=new AudioEngine();
-this.particles=new ParticleSystem();
-this.shake=new Shake();
-
-this.running=false;
-this.score=0;
-this.highScore=localStorage.getItem("high")||0;
-
-document.getElementById("highScore").innerText="High: "+this.highScore;
-
-this.last=0;
-this.loop=this.loop.bind(this);
-
-requestAnimationFrame(this.loop);
-}
-
-resize(){
-this.canvas.width=innerWidth;
-this.canvas.height=innerHeight;
-}
-
-start(){
-document.getElementById("startScreen").classList.add("hidden");
-this.running=true;
-this.score=0;
-}
-
-restart(){
-document.getElementById("gameOverScreen").classList.add("hidden");
-this.running=true;
-this.score=0;
-}
-
-gameOver(){
-this.running=false;
-document.getElementById("gameOverScreen").classList.remove("hidden");
-document.getElementById("finalScore").innerText="Score: "+this.score;
-
-if(this.score>this.highScore){
-this.highScore=this.score;
-localStorage.setItem("high",this.highScore);
-}
-}
-
-update(dt){
-if(!this.running) return;
-
-this.particles.update();
-}
-
-draw(){
-const ctx=this.ctx;
-const shake=this.shake.update();
-
-ctx.setTransform(1,0,0,1,0,0);
-ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-
-ctx.translate(shake.x,shake.y);
-
-/* background glow */
-let g=ctx.createLinearGradient(0,0,0,this.canvas.height);
-g.addColorStop(0,"#0b0f1a");
-g.addColorStop(1,"#111a33");
-ctx.fillStyle=g;
-ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
-
-this.particles.draw(ctx);
-}
-
-loop(t){
-const dt=t-this.last;
-this.last=t;
-
-this.update(dt);
-this.draw();
-
-requestAnimationFrame(this.loop);
-}
-}
-
-/* start game */
-const canvas=document.getElementById("game");
-const game=new Game(canvas);
-</script>
-
+            pin.style.transform = "translateX(-50%)";
+            pin.style.opacity = "1";
+            
+            bees.style.transition = "none";
+            bees.style.top = "100px";
+            
+            wall.style.display = 'block';
+            
+            hero.innerText = "😐";
+            hero.style.animation = "none";
+            hero.style.filter = "none";
+            hero.style.opacity = "1";
+        }
+    </script>
 </body>
 </html>
-<script>
-/* =====================
-   GAME OBJECTS
-===================== */
-
-class Block{
-constructor(game){
-this.game=game;
-
-this.w=120;
-this.h=30;
-
-this.x=game.canvas.width/2 - this.w/2;
-this.y=game.canvas.height - 200;
-
-this.speed=3 + game.level*0.3;
-this.dir=Math.random()>0.5?1:-1;
-
-this.dropped=false;
-this.color=`hsl(${Math.random()*360},80%,60%)`;
-}
-
-update(){
-if(this.dropped) return;
-
-this.x += this.speed*this.dir;
-
-/* bounce walls */
-if(this.x<0){
-this.x=0;
-this.dir=1;
-}
-if(this.x+this.w>this.game.canvas.width){
-this.x=this.game.canvas.width-this.w;
-this.dir=-1;
-}
-}
-
-draw(ctx){
-ctx.fillStyle=this.color;
-ctx.shadowBlur=20;
-ctx.shadowColor=this.color;
-ctx.fillRect(this.x,this.y,this.w,this.h);
-ctx.shadowBlur=0;
-}
-}
-
-/* =====================
-   MAIN GAME LOGIC EXTENSION
-===================== */
-
-Game.prototype.initGameplay=function(){
-this.blocks=[];
-this.cameraY=0;
-this.level=1;
-this.combo=0;
-this.spawnBlock();
-};
-
-Game.prototype.spawnBlock=function(){
-this.current=new Block(this);
-this.blocks.push(this.current);
-};
-
-Game.prototype.dropBlock=function(){
-if(!this.current || this.current.dropped) return;
-
-this.current.dropped=true;
-
-let prev=this.blocks[this.blocks.length-2];
-
-if(!prev){
-this.score+=1;
-this.next();
-return;
-}
-
-/* overlap check */
-let overlap=
-Math.min(this.current.x+this.current.w,prev.x+prev.w) -
-Math.max(this.current.x,prev.x);
-
-if(overlap>this.current.w*0.6){
-/* PERFECT */
-this.combo++;
-this.score+=2*this.combo;
-this.audio.beep(600,0.08);
-this.particles.spawn(this.current.x,this.current.y,this.current.color);
-this.shake.add(5);
-
-} else if(overlap>this.current.w*0.2){
-/* GOOD */
-this.combo=0;
-this.score+=1;
-this.audio.beep(300,0.08);
-this.particles.spawn(this.current.x,this.current.y,this.current.color);
-
-} else {
-/* MISS */
-this.audio.beep(120,0.2,"square");
-this.gameOver();
-return;
-}
-
-this.next();
-};
-
-Game.prototype.next=function(){
-this.level = 1 + Math.floor(this.score/10);
-this.spawnBlock();
-};
-
-/* =====================
-   INPUT HOOK
-===================== */
-
-Game.prototype.handleInput=function(){
-if(!this.running) return;
-
-if(this.input.down){
-this.input.down=false;
-this.dropBlock();
-}
-};
-
-/* =====================
-   UPDATE OVERRIDE
-===================== */
-
-const oldUpdate=Game.prototype.update;
-
-Game.prototype.update=function(dt){
-if(!this.running) return;
-
-this.handleInput();
-
-if(this.current && !this.current.dropped){
-this.current.update();
-}
-
-this.particles.update();
-
-/* score UI */
-document.getElementById("score").innerText="Score: "+this.score;
-document.getElementById("highScore").innerText="High: "+this.highScore;
-};
-
-/* =====================
-   DRAW OVERRIDE
-===================== */
-
-const oldDraw=Game.prototype.draw;
-
-Game.prototype.draw=function(){
-const ctx=this.ctx;
-const shake=this.shake.update();
-
-ctx.setTransform(1,0,0,1,0,0);
-ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-
-ctx.translate(shake.x,shake.y);
-
-/* background */
-let g=ctx.createLinearGradient(0,0,0,this.canvas.height);
-g.addColorStop(0,"#0b0f1a");
-g.addColorStop(1,"#0f1d
-<script>
-/* =====================
-   PAUSE SYSTEM
-===================== */
-
-Game.prototype.togglePause=function(){
-if(!this.running) return;
-
-this.paused = !this.paused;
-
-if(this.paused){
-this.running=false;
-document.getElementById("startScreen").classList.remove("hidden");
-document.querySelector("#startScreen h1").innerText="PAUSED";
-document.querySelector("#startScreen p").innerText="Tap resume to continue";
-document.querySelector("#startScreen button").innerText="Resume";
-document.querySelector("#startScreen button").onclick=()=>this.resume();
-}else{
-this.resume();
-}
-};
-
-Game.prototype.resume=function(){
-this.running=true;
-this.paused=false;
-document.getElementById("startScreen").classList.add("hidden");
-};
-
-/* =====================
-   JUICE SYSTEM (camera pulse + hit flash)
-===================== */
-
-Game.prototype.flash=0;
-
-Game.prototype.addFlash=function(){
-this.flash=1;
-};
-
-const oldDraw3=Game.prototype.draw;
-
-Game.prototype.draw=function(){
-const ctx=this.ctx;
-const shake=this.shake.update();
-
-ctx.setTransform(1,0,0,1,0,0);
-ctx.clearRect(0,0,this.canvas.width,this.canvas.height);
-
-/* flash overlay */
-if(this.flash>0){
-this.flash*=0.9;
-ctx.fillStyle=`rgba(255,255,255,${this.flash*0.3})`;
-ctx.fillRect(0,0,this.canvas.width,this.canvas.height);
-}
-
-/* camera shake */
-ctx.translate(shake.x,shake.y);
-
-/* background pulse based on score */
-let pulse = 1 + Math.sin(Date.now()*0.005)*0.02;
-ctx.scale(pulse,pulse);
-
-let g=ctx.createLinearGradient(0,0,0,this.canvas.height);
-g.addColorStop(0,"#070b14");
-g.addColorStop(1,"#12244a");
-ctx.fillStyle=g;
-ctx.fillRect(-200,-200,this.canvas.width+400,this.canvas.height+400);
-
-/* draw blocks */
-for(let b of this.blocks){
-b.draw(ctx);
-}
-
-/* particles */
-this.particles.draw(ctx);
-};
-
-/* =====================
-   BETTER INPUT FEEDBACK
-===================== */
-
-const oldHandle=Game.prototype.handleInput;
-
-Game.prototype.handleInput=function(){
-if(!this.running) return;
-
-if(this.input.down){
-this.input.down=false;
-
-/* tap feedback */
-this.addFlash();
-
-this.dropBlock();
-this.audio.beep(200+Math.random()*300,0.05);
-}
-};
-
-/* =====================
-   BETTER BLOCK DROP JUICE
-===================== */
-
-const oldDrop=Game.prototype.dropBlock;
-
-Game.prototype.dropBlock=function(){
-if(!this.current || this.current.dropped) return;
-
-this.current.dropped=true;
-
-let prev=this.blocks[this.blocks.length-2];
-
-if(!prev){
-this.score+=1;
-this.next();
-return;
-}
-
-let overlap=
-Math.min(this.current.x+this.current.w,prev.x+prev.w) -
-Math.max(this.current.x,prev.x);
-
-if(overlap>this.current.w*0.65){
-/* PERFECT */
-this.combo++;
-this.score+=2*this.combo;
-
-this.audio.beep(700,0.06);
-this.audio.beep(900,0.06);
-
-this.particles.spawn(this.current.x,this.current.y,this.current.color);
-this.shake.add(8);
-this.addFlash();
-
-} else if(overlap>this.current.w*0.25){
-/* GOOD */
-this.combo=0;
-this.score+=1;
-
-this.audio.beep(350,0.08);
-this.particles.spawn(this.current.x,this.current.y,this.current.color);
-
-} else {
-/* MISS */
-this.combo=0;
-
-this.audio.beep(100,0.2,"square");
-this.shake.add(15);
-this.addFlash();
-
-this.gameOver();
-return;
-}
-
-this.next();
-};
-
-/* =====================
-   IMPROVED START / RESTART FLOW
-===================== */
-
-const oldStart3=Game.prototype.start;
-Game.prototype.start=function(){
-document.getElementById("startScreen").classList.add("hidden");
-
-this.running=true;
-this.paused=false;
-
-this.score=0;
-this.level=1;
-this.combo=0;
-
-this.blocks=[];
-this.initGameplay();
-};
-
-const oldRestart3=Game.prototype.restart;
-Game.prototype.restart=function(){
-document.getElementById("gameOverScreen").classList.add("hidden");
-
-this.running=true;
-this.paused=false;
-
-this.score=0;
-this.level=1;
-this.combo=0;
-
-this.blocks=[];
-this.initGameplay();
-};
-
-/* =====================
-   TOUCH: PREVENT SCROLL + TRUE MOBILE FEEL
-===================== */
-
-document.body.addEventListener("touchmove",e=>{
-e.preventDefault();
-},{passive:false});
-
-/* =====================
-   KEYBOARD SUPPORT (desktop bonus)
-===================== */
-
-window.addEventListener("keydown",e=>{
-if(e.code==="Space"){
-game.input.down=true;
-}
-if(e.code==="KeyP"){
-game.togglePause();
-}
-});
-
-/* =====================
-   FINAL BOOT FIX
-===================== */
-
-game.initGameplay();
-</script>
